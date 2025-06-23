@@ -1,0 +1,203 @@
+#!/usr/bin/env php
+<?php
+
+if ($argc < 2) {
+    echo "Comando requerido. Ejemplo:\n";
+    echo "  php artisan make:controller NombreControlador [tipos_permitidos]\n";
+    exit(1);
+}
+
+$comando = $argv[1];
+
+switch ($comando) {
+    case 'make:controller':
+        require __DIR__ . '/cli/crear_controlador.php';
+        $nombreControlador = $argv[2] ?? null; // Ej: PruebaController
+        $nombreModelo = $argv[3] ?? null;      // Ej: Prueba
+        $nombreVista = $argv[4] ?? null;       // Ej: prueba
+        $campos = $argv[5] ?? null;            // Ej: campo1,campo2,campo3
+        if (!$nombreControlador || !$nombreModelo || !$nombreVista || !$campos) {
+            echo "Uso: php artisan make:controller NombreControlador NombreModelo nombreVista campo1,campo2,...\n";
+            exit(1);
+        }
+        crearControladorCRUD($nombreControlador, $nombreModelo, $nombreVista, $campos);
+        break;
+
+
+    case 'make:model':
+        require __DIR__ . '/cli/crear_modelo.php';
+        $nombreModelo = $argv[2] ?? null;
+        $nombreTabla = $argv[3] ?? null;
+        if (!$nombreModelo || !$nombreTabla) {
+            echo "Uso: php artisan make:model NombreModelo nombre_tabla\n";
+            exit(1);
+        }
+        crearModelo($nombreModelo, $nombreTabla);
+        break;
+
+    case 'make:view':
+        require __DIR__ . '/cli/crear_vista.php';
+        $rutaVista = $argv[2] ?? null;
+        if (!$rutaVista) {
+            echo "Uso: php artisan make:view carpeta/vista_nombre\n";
+            exit(1);
+        }
+        crearVista($rutaVista);
+        break;
+
+    case 'make:route':
+        require __DIR__ . '/cli/crear_ruta.php';
+        $urlPattern = $argv[2] ?? null;
+        $controller = $argv[3] ?? null;
+        $method = $argv[4] ?? null;
+        $conId = isset($argv[5]) ? filter_var($argv[5], FILTER_VALIDATE_BOOLEAN) : false;
+        if (!$urlPattern || !$controller || !$method) {
+            echo "Uso: php artisan make:route url/patron Controlador metodo [true|false]\n";
+            echo "Ejemplo: php artisan make:route empresa/editar/usuario/{id} UsuarioController editar true\n";
+            exit(1);
+        }
+        crearRuta($urlPattern, $controller, $method, $conId);
+        break;
+
+    case 'make:migration':
+        require __DIR__ . '/cli/crear_migracion.php';
+        $nombre = $argv[2] ?? null;
+        if (!$nombre) {
+            echo "Uso: php artisan make:migration nombre_de_la_migracion\n";
+            exit(1);
+        }
+        crearMigracion($nombre);
+        break;
+
+    case 'migrate':
+        require_once __DIR__ . '/config/database.php';
+        $conn = (new Database())->conectar();
+
+        // 1. Crea la tabla de migraciones si no existe
+        $conn->exec("CREATE TABLE IF NOT EXISTS migraciones (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                archivo VARCHAR(255) NOT NULL,
+                ejecutada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )");
+
+        $migrationsDir = __DIR__ . '/database/migrations';
+        if (!is_dir($migrationsDir)) {
+            echo "No existe el directorio de migraciones.\n";
+            exit(1);
+        }
+
+        $archivos = glob("$migrationsDir/*.php");
+        if (!$archivos) {
+            echo "No hay archivos de migración.\n";
+            exit(0);
+        }
+
+        // 2. Lee migraciones ya ejecutadas
+        $ejecutadas = [];
+        $stmt = $conn->query("SELECT archivo FROM migraciones");
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $ejecutadas[] = $row['archivo'];
+        }
+
+        foreach ($archivos as $archivo) {
+            $archivoBase = basename($archivo);
+            if (in_array($archivoBase, $ejecutadas)) {
+                continue; // Saltar si ya se ejecutó
+            }
+            require_once $archivo;
+            $nombreClase = pathinfo($archivo, PATHINFO_FILENAME);
+            $nombreClase = preg_replace('/^(\d+_)+/', '', $nombreClase);
+            $nombreClase = str_replace(' ', '', ucwords(str_replace(['_', '-'], ' ', $nombreClase)));
+            if (class_exists($nombreClase)) {
+                $migracion = new $nombreClase();
+                $migracion->up($conn);
+                $conn->prepare("INSERT INTO migraciones (archivo) VALUES (?)")->execute([$archivoBase]);
+                echo "Migración ejecutada: $archivoBase\n";
+            } else {
+                echo "El archivo $archivo no define la clase $nombreClase\n";
+            }
+        }
+        break;
+
+    case 'migrate:rollback':
+        require_once __DIR__ . '/config/database.php';
+        $conn = (new Database())->conectar();
+
+        // 1. Asegúrate que existe la tabla de migraciones
+        $conn->exec("CREATE TABLE IF NOT EXISTS migraciones (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                archivo VARCHAR(255) NOT NULL,
+                ejecutada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )");
+
+        // 2. Obtén la última migración ejecutada
+        $stmt = $conn->query("SELECT archivo FROM migraciones ORDER BY id DESC LIMIT 1");
+        $ultima = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$ultima) {
+            echo "No hay migraciones para revertir.\n";
+            exit(0);
+        }
+
+        $archivo = __DIR__ . '/database/migrations/' . $ultima['archivo'];
+        if (!file_exists($archivo)) {
+            echo "No se encontró el archivo de la última migración: {$ultima['archivo']}\n";
+            exit(1);
+        }
+
+        require_once $archivo;
+        $nombreClase = pathinfo($archivo, PATHINFO_FILENAME);
+        $nombreClase = preg_replace('/^(\d+_)+/', '', $nombreClase);
+        $nombreClase = str_replace(' ', '', ucwords(str_replace(['_', '-'], ' ', $nombreClase)));
+        if (class_exists($nombreClase)) {
+            $migracion = new $nombreClase();
+            $migracion->down($conn);
+            $conn->prepare("DELETE FROM migraciones WHERE archivo = ?")->execute([$ultima['archivo']]);
+            echo "Migración revertida: {$ultima['archivo']}\n";
+        } else {
+            echo "El archivo {$ultima['archivo']} no define la clase $nombreClase\n";
+        }
+        break;
+
+
+    case 'route:list':
+        require __DIR__ . '/cli/listar_rutas.php';
+        listarRutas(__DIR__ . '/index.php');
+        break;
+
+    case 'make:crud':
+        require __DIR__ . '/cli/crear_crud.php';
+        // Ejemplo de uso: php artisan make:crud prueba pruebas campo1,campo2
+        $entidad = $argv[2] ?? null; // Nombre de la entidad (ej: prueba)
+        $tabla   = $argv[3] ?? null; // Nombre de la tabla (ej: pruebas)
+        $campos  = $argv[4] ?? null; // Lista de campos (ej: nombre,descripcion)
+
+        if (!$entidad || !$tabla) {
+            echo "Uso: php artisan make:crud entidad tabla [campo1,campo2,...]\n";
+            exit(1);
+        }
+
+        // Si no se pasan campos, obtenerlos de la base de datos
+        if (!$campos) {
+            $campos = obtenerCamposDeTabla($tabla); // Obtener campos de la tabla automáticamente
+            if (empty($campos)) {
+                echo "ERROR: No se encontraron campos para la tabla '$tabla'.\n";
+                exit(1);
+            }
+            // Convertir el array de campos a una cadena separada por comas
+            $campos = implode(',', $campos);
+        }
+
+        // Crear el CRUD con los campos obtenidos
+        crearCRUD($entidad, $tabla, $campos);
+        break;
+
+
+    default:
+        echo "Comando no reconocido.\n";
+        echo "Comandos disponibles:\n";
+        echo "  make:migration nombre_de_la_migracion\n";
+        echo "  migrate\n";
+        echo "  migrate:rollback\n";
+        break;
+}
