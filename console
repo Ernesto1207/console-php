@@ -61,12 +61,19 @@ switch ($comando) {
 
     case 'make:migration':
         require __DIR__ . '/cli/crear_migracion.php';
+
         $nombre = $argv[2] ?? null;
+
+        $campos = $argv[3] ?? null;
+
         if (!$nombre) {
-            echo "Uso: php artisan make:migration nombre_de_la_migracion\n";
+            echo "Uso: php artisan make:migration nombre_de_la_migracion [campo1,campo2,...]\n";
             exit(1);
         }
-        crearMigracion($nombre);
+
+        $camposArray = $campos ? explode(',', $campos) : [];
+
+        crearMigracion($nombre, $camposArray);
         break;
 
     case 'migrate':
