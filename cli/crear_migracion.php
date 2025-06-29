@@ -1,11 +1,6 @@
 <?php
 function crearMigracion($nombre, $campos = [])
 {
-    if (empty($campos)) {
-        echo "ERROR: Debes especificar al menos un campo para la migración, Ejemplo 'nombre' .\n";
-        exit(1);
-    }
-
     $nombre = strtolower($nombre);
     $nombreClase = str_replace(' ', '', ucwords(str_replace(['_', '-'], ' ', $nombre)));
     $fecha = date('Ymd_His');
