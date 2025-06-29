@@ -1,8 +1,9 @@
 <?php
 
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$host = $_SERVER['HTTP_HOST'] ?? 'prueba.test';
 
-if (in_array($host, ['localhost', '127.0.0.1', ''])) {
+// Determinamos el entorno
+if (in_array($host, ['localhost', '127.0.0.1', 'prueba.test'])) {
     define('APP_ENV', 'development');
 } else {
     define('APP_ENV', 'production');
@@ -11,7 +12,7 @@ if (in_array($host, ['localhost', '127.0.0.1', ''])) {
 $config = [
     'development' => [
         'host' => 'localhost',
-        'db_name' => 'facturacion',
+        'db_name' => 'prueba',
         'username' => 'root',
         'password' => '',
         'display_errors' => true

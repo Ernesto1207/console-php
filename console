@@ -192,7 +192,14 @@ switch ($comando) {
         crearCRUD($entidad, $tabla, $campos);
         break;
 
+    case 'install':
+        require __DIR__ . '/cli/install.php';
+        break;
 
+    case 'create:auth':
+        require __DIR__ . '/cli/create_auth.php';
+        break;
+        
     default:
         echo "Comando no reconocido.\n";
         echo "Comandos disponibles:\n";
