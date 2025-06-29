@@ -199,7 +199,7 @@ function realizarSolicitud(\$url)
 }
 
 spl_autoload_register(function (string \$class): bool {
-    \$base = __DIR__ . '/../app/';
+    \$base = __DIR__ . '/app/';
     \$folders = ['controllers', 'models', 'helpers', 'core'];
 
     foreach (\$folders as \$dir) {
